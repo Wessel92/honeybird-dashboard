@@ -1,0 +1,21 @@
+{
+  "Honeybird": {
+    "legal_name": "HONEYBIRD PRIVATE EQUITY (PTY) LTD",
+    "entity_type": "Private Company",
+    "registration_number": "2024/447842/07",
+    "vat_number": "9388727225",
+    "vat_registered": true,
+    "income_tax_number": "9388727225",
+    "address": "151 Meyer Street, George, 6529",
+    "directors": ["Wessel Schuurman (Director)"],
+    "shareholders": ["Wessel Schuurman (Director)"],
+    "financial_year_end": "April",
+    "date_of_registration": "22/07/2024",
+    "previous_names": ["Entwood (Pty) Ltd", "Entwood Investment Group"],
+    "bank_accounts": [
+      {"bank": "Bank Zero", "account_number": "80204693662", "account_type": "Business Account", "branch": ""},
+      {"bank": "Capitec", "account_number": "1053469489", "account_type": "Business Account", "branch": "450105"},
+      {"bank": "EasyEquities", "account_number": "3212", "account_type": "Investment Account", "branch": ""}
+    ]
+  }
+}

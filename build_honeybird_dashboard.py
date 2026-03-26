@@ -1,0 +1,1019 @@
+#!/usr/bin/env python3
+"""
+Honeybird Private Equity Dashboard Builder
+Generates a self-contained HTML dashboard from JSON data files.
+Architecture mirrors the Peperbos Group Dashboard.
+"""
+
+import json
+import os
+import sys
+from datetime import datetime
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, 'data')
+OUTPUT_PATH = os.path.join(SCRIPT_DIR, 'index.html')
+
+# Honeybird's authoritative account numbers
+HONEYBIRD_ACCOUNTS = {'80204693662', '1053469489', '3212'}
+
+
+def load_json(filename, default=None):
+    path = os.path.join(DATA_DIR, filename)
+    if not os.path.exists(path):
+        print(f"[WARN] {filename} not found, using default")
+        return default if default is not None else []
+    with open(path, 'r') as f:
+        return json.load(f)
+
+
+def validate_account_ownership(transactions, registry):
+    """Validate and auto-fix account-entity assignments."""
+    fixes = 0
+    for txn in transactions:
+        acct = txn.get('account', '')
+        if acct in HONEYBIRD_ACCOUNTS and txn.get('entity') != 'Honeybird':
+            txn['entity'] = 'Honeybird'
+            fixes += 1
+    if fixes:
+        print(f"[FIX] Corrected {fixes} transactions to Honeybird entity")
+    # Warn about non-Honeybird accounts
+    bad = [t for t in transactions if t.get('account', '') not in HONEYBIRD_ACCOUNTS]
+    if bad:
+        print(f"[WARN] {len(bad)} transactions have non-Honeybird accounts — removing")
+        transactions[:] = [t for t in transactions if t.get('account', '') in HONEYBIRD_ACCOUNTS]
+    return transactions
+
+
+def minify_json(obj):
+    return json.dumps(obj, separators=(',', ':'), ensure_ascii=False)
+
+
+def generate_css():
+    return """
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#1a1d29;--bg3:#141720;--border:#2d3139;
+  --text:#e5e7eb;--text2:#9ca3af;--green:#10b981;--blue:#3b82f6;
+  --red:#ef4444;--orange:#f59e0b;--purple:#8b5cf6;--pink:#ec4899;
+  --accent:#f59e0b;--card-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+.light-mode{
+  --bg:#f8f6f1;--bg2:#ffffff;--bg3:#f0ede6;--border:#e0ddd5;
+  --text:#1a1a2e;--text2:#6b7280;--card-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:16px;transition:all 0.3s ease}
+.header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid var(--border);margin-bottom:8px;flex-wrap:wrap;gap:8px}
+.header h1{color:var(--accent);font-size:24px}
+.header h1 span.bee{font-size:28px}
+.header .updated{color:var(--text2);font-size:12px}
+.entity-info{color:var(--text2);font-size:11px;margin-top:2px}
+.entity-info .prev-name{color:var(--orange);font-style:italic}
+.quote-bar{text-align:center;padding:6px 16px;color:var(--text2);font-size:12px;font-style:italic;margin-bottom:12px}
+.theme-toggle{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;transition:all 0.3s}
+.theme-toggle:hover{border-color:var(--accent)}
+.tab-bar{display:flex;gap:4px;border-bottom:1px solid var(--border);padding:0 16px;margin-bottom:20px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab-bar::-webkit-scrollbar{height:3px}
+.tab-bar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.tab-btn{background:none;border:none;color:var(--text2);padding:10px 16px;cursor:pointer;font-size:13px;border-bottom:2px solid transparent;white-space:nowrap;flex-shrink:0;transition:color 0.2s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:var(--card-shadow);transition:all 0.3s}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:all 0.2s;box-shadow:var(--card-shadow)}
+.kpi:hover{border-color:var(--accent);transform:translateY(-2px)}
+.kpi .label{color:var(--text2);font-size:12px;margin-bottom:4px}
+.kpi .value{font-size:22px;font-weight:700;color:var(--text)}
+.kpi .value.green{color:var(--green)}
+.kpi .value.red{color:var(--red)}
+.chart-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px;position:relative;box-shadow:var(--card-shadow);transition:all 0.3s}
+.chart-box h3{color:var(--text);font-size:14px;margin-bottom:12px}
+.chart-box canvas{max-height:350px!important}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--bg3);color:var(--text2);padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);position:sticky;top:0;font-weight:600}
+td{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--text)}
+.light-mode td{border-bottom:1px solid #e5e5e5}
+tr:hover{background:rgba(245,158,11,0.05)}
+.badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-green{background:#064e3b;color:#10b981}
+.badge-red{background:#7f1d1d;color:#ef4444}
+.badge-orange{background:#78350f;color:#f59e0b}
+.light-mode .badge-green{background:#d1fae5;color:#059669}
+.light-mode .badge-red{background:#fee2e2;color:#dc2626}
+.light-mode .badge-orange{background:#fef3c7;color:#d97706}
+.error-banner{background:#7f1d1d;border:1px solid #ef4444;color:#ef4444;padding:14px 20px;border-radius:8px;margin-bottom:16px;font-weight:600;font-size:14px}
+.success-banner{background:#064e3b;border:1px solid #10b981;color:#10b981;padding:14px 20px;border-radius:8px;margin-bottom:16px;font-weight:600;font-size:14px}
+.light-mode .error-banner{background:#fee2e2;border-color:#fca5a5}
+.light-mode .success-banner{background:#d1fae5;border-color:#6ee7b7}
+select,input[type="text"],input[type="date"]{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:13px;transition:all 0.3s}
+select:focus,input:focus{border-color:var(--accent);outline:none}
+.filter-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.btn{background:var(--accent);color:#0f1117;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;transition:all 0.2s}
+.btn:hover{opacity:0.9;transform:translateY(-1px)}
+.sub-tabs{display:flex;gap:4px;margin-bottom:16px}
+.sub-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;transition:all 0.2s}
+.sub-btn.active{background:var(--accent);color:#0f1117;border-color:var(--accent)}
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:700px;width:95vw;max-height:80vh;overflow-y:auto;position:relative}
+.modal h3{color:var(--accent);margin-bottom:16px}
+.modal .close{position:absolute;top:12px;right:16px;color:var(--text2);cursor:pointer;font-size:20px;background:none;border:none}
+.pagination{display:flex;gap:8px;align-items:center;margin-top:12px;justify-content:center}
+.pagination button{background:var(--bg3);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:4px;cursor:pointer}
+.pagination button.active{background:var(--accent);color:#0f1117;border-color:var(--accent)}
+.recon-table{width:100%;border-collapse:collapse;font-size:12px}
+.recon-table th{background:var(--bg3);color:var(--text2);padding:12px;text-align:left;border-bottom:2px solid var(--border);white-space:nowrap}
+.recon-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap}
+.recon-table tr:hover{background:rgba(245,158,11,0.05)}
+.info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:13px}
+.info-grid .lbl{color:var(--text2)}
+.info-grid .val{color:var(--text);font-weight:500}
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.coming-soon{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center}
+.coming-soon h2{font-size:48px;margin-bottom:16px}
+.coming-soon p{color:var(--text2);font-size:18px;max-width:500px;line-height:1.6}
+.prev-name{color:var(--orange);font-size:11px;font-style:italic}
+@media(max-width:768px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .grid-2,.grid-3{grid-template-columns:1fr}
+  .header{padding:12px 16px}
+  .header h1{font-size:18px}
+  .tab-btn{font-size:11px;padding:8px 10px}
+  .kpi .value{font-size:16px}
+  .filter-row{flex-direction:column}
+  .filter-row select,.filter-row input{width:100%}
+  table{font-size:11px}
+  th,td{padding:6px 8px}
+  .chart-box canvas{max-height:250px!important}
+  .chart-box{padding:12px}
+  .info-grid{grid-template-columns:1fr}
+  .recon-table{font-size:10px}
+  .recon-table th,.recon-table td{padding:6px 8px}
+}
+@media(max-width:480px){
+  body{padding:8px}
+  .kpi-grid{grid-template-columns:1fr}
+  .tab-btn{font-size:10px;padding:6px 8px}
+  .chart-box canvas{max-height:200px!important}
+  .kpi .value{font-size:14px}
+  .header h1{font-size:16px}
+}
+"""
+
+
+def generate_html_structure(build_date):
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>Honeybird Private Equity Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23f59e0b'/%3E%3Ctext x='50' y='70' font-size='55' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+{generate_css()}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1><span class="bee">🐝</span> Honeybird Private Equity</h1>
+    <div class="entity-info">
+      HONEYBIRD PRIVATE EQUITY (PTY) LTD &bull; Reg: 2024/447842/07 &bull; FYE: April
+      <br><span class="prev-name">Previously: Entwood (Pty) Ltd &rarr; Entwood Investment Group</span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="theme-toggle" onclick="toggleTheme()">
+      <span id="themeIcon">☀️</span> <span id="themeText">Light Mode</span>
+    </button>
+    <div class="updated">Last updated: {build_date}</div>
+  </div>
+</div>
+
+<div class="quote-bar" id="quoteBar"></div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+  <button class="tab-btn" onclick="switchTab('bankstatements')">Bank Statements</button>
+  <button class="tab-btn" onclick="switchTab('bankrecon')">Bank Recon</button>
+  <button class="tab-btn" onclick="switchTab('incomestatement')">Income Statement</button>
+  <button class="tab-btn" onclick="switchTab('balancesheet')">Balance Sheet</button>
+  <button class="tab-btn" onclick="switchTab('cashflow')">Cash Flow</button>
+  <button class="tab-btn" onclick="switchTab('invoices')">Invoices</button>
+  <button class="tab-btn" onclick="switchTab('spending')">Spending Tracker</button>
+  <button class="tab-btn" onclick="switchTab('loanschedules')">Loan Schedules</button>
+</div>
+
+<!-- OVERVIEW TAB -->
+<div id="tab-overview" class="tab-content active">
+  <div class="kpi-grid" id="kpiGrid"></div>
+  <div class="grid-2">
+    <div class="chart-box"><h3>Income vs Expenses (12-Month Trend)</h3><canvas id="chartTrend"></canvas></div>
+    <div class="chart-box"><h3>Top Expense Categories</h3><canvas id="chartExpCat"></canvas></div>
+  </div>
+  <div class="card" id="dataQuality"></div>
+  <div class="card" id="entityDetails"></div>
+</div>
+
+<!-- BANK STATEMENTS TAB -->
+<div id="tab-bankstatements" class="tab-content">
+  <div class="filter-row">
+    <select id="bsAccount" onchange="renderBankStatements()">
+      <option value="">All Accounts</option>
+      <option value="80204693662">Bank Zero (80204693662)</option>
+      <option value="1053469489">Capitec (1053469489)</option>
+      <option value="3212">EasyEquities (3212)</option>
+    </select>
+    <select id="bsCategory" onchange="renderBankStatements()">
+      <option value="">All Categories</option>
+    </select>
+  </div>
+  <div class="card tbl-scroll" id="bsTable"></div>
+  <div class="pagination" id="bsPagination"></div>
+</div>
+
+<!-- BANK RECON TAB -->
+<div id="tab-bankrecon" class="tab-content">
+  <div class="card" id="reconTable"></div>
+</div>
+
+<!-- INCOME STATEMENT TAB -->
+<div id="tab-incomestatement" class="tab-content">
+  <div class="card" id="incomeStmt"></div>
+</div>
+
+<!-- BALANCE SHEET TAB -->
+<div id="tab-balancesheet" class="tab-content">
+  <div id="bsBanner"></div>
+  <div class="card" id="balanceSheetContent"></div>
+</div>
+
+<!-- CASH FLOW TAB -->
+<div id="tab-cashflow" class="tab-content">
+  <div class="chart-box"><h3>Monthly Cash Flow</h3><canvas id="chartCashFlow"></canvas></div>
+  <div class="card" id="cashFlowTable"></div>
+</div>
+
+<!-- INVOICES TAB -->
+<div id="tab-invoices" class="tab-content">
+  <div class="sub-tabs">
+    <button class="sub-btn active" onclick="filterInvoices('all')">All</button>
+    <button class="sub-btn" onclick="filterInvoices('matched')">Matched</button>
+    <button class="sub-btn" onclick="filterInvoices('unmatched')">Unmatched</button>
+  </div>
+  <div class="card tbl-scroll" id="invTable"></div>
+</div>
+
+<!-- SPENDING TRACKER TAB -->
+<div id="tab-spending" class="tab-content">
+  <div class="grid-2">
+    <div class="chart-box"><h3>Expense Breakdown by Category</h3><canvas id="chartSpendPie"></canvas></div>
+    <div class="chart-box"><h3>Monthly Spend by Category</h3><canvas id="chartSpendStack"></canvas></div>
+  </div>
+</div>
+
+<!-- LOAN SCHEDULES TAB -->
+<div id="tab-loanschedules" class="tab-content">
+  <div class="coming-soon">
+    <h2>👨‍🍳</h2>
+    <p>Chill, it's cooking... We're busy making this tab look proper lekker. Sit tight — the amortisation tables, interest breakdowns, and all that jazz are on the way.</p>
+  </div>
+</div>
+
+<!-- DRILL-DOWN MODAL -->
+<div class="modal-overlay" id="drillModal">
+  <div class="modal">
+    <button class="close" onclick="closeModal()">&times;</button>
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+  </div>
+</div>
+"""
+
+
+def generate_javascript(transactions, recon, invoices, registry, build_date):
+    txn_json = minify_json(transactions)
+    recon_json = minify_json(recon)
+    inv_json = minify_json(invoices)
+    reg_json = minify_json(registry)
+
+    return """
+<script>
+// ========== DATA ==========
+var TXN=""" + txn_json + """;
+var RECON=""" + recon_json + """;
+var INVOICES=""" + inv_json + """;
+var ENTITY=""" + reg_json + """;
+var BUILD_DATE='""" + build_date + """';
+
+var QUOTES=[
+  "Money talks... ours just waves goodbye 👋",
+  "Behind every successful business is a very confused accountant",
+  "My assets are balanced, but my life is not 🤷",
+  "Excel: because therapy is expensive",
+  "Honeybird — where private equity meets public confusion",
+  "Accountants do it with double entries",
+  "In accounting, every debit has a credit. In life? Not so much.",
+  "VAT happens 💸",
+  "Profit is an opinion, cash is a fact",
+  "If it doesn't balance, add a suspense account and run",
+  "The only thing certain in life: death, taxes, and bank charges",
+  "Keep calm and reconcile on",
+  "I came, I saw, I depreciated",
+  "Accountants: turning coffee into financial statements since forever",
+  "This dashboard is GAAP-tastic ✨",
+  "Net worth: still calculating... 🔄",
+  "From Entwood to Honeybird — the glow-up is real 🐝"
+];
+
+var charts={};
+var currentInvFilter='all';
+var bsPage=1;
+var BS_PER_PAGE=50;
+
+// ========== FY HELPERS ==========
+// Honeybird FYE = April. YTD = 1 May to 30 April
+function getFYMonths(){
+  // Returns the 12 months of the current FY based on build date
+  var bd=new Date(BUILD_DATE);
+  var yr=bd.getFullYear();
+  var mo=bd.getMonth(); // 0-indexed
+  // FY starts May (month 4). If we're in Jan-Apr, FY started previous year
+  var fyStartYear=(mo<4)?yr-1:yr;
+  var months=[];
+  for(var i=0;i<12;i++){
+    var m=4+i; // start from May (month 4)
+    var y=fyStartYear;
+    if(m>11){m=m-12;y=fyStartYear+1;}
+    var ms=String(m+1);if(ms.length<2)ms='0'+ms;
+    months.push(y+'-'+ms);
+  }
+  return months;
+}
+function getMonthLabel(ym){
+  var parts=ym.split('-');
+  var names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return names[parseInt(parts[1],10)-1]+' '+parts[0].substring(2);
+}
+function getCurrentMonth(){
+  var bd=new Date(BUILD_DATE);
+  var m=String(bd.getMonth()+1);if(m.length<2)m='0'+m;
+  return bd.getFullYear()+'-'+m;
+}
+
+// ========== UTILITIES ==========
+function fmt(n){
+  if(n===null||n===undefined||isNaN(n))return 'R 0,00';
+  return new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(n);
+}
+function isLiability(obj){return !!(obj.is_liability||obj.is_mortgage||obj.display_as_liability);}
+
+function toggleTheme(){
+  document.body.classList.toggle('light-mode');
+  var isLight=document.body.classList.contains('light-mode');
+  document.getElementById('themeIcon').textContent=isLight?'🌙':'☀️';
+  document.getElementById('themeText').textContent=isLight?'Dark Mode':'Light Mode';
+  renderActiveTab();
+}
+function rotateQuote(){
+  var q=QUOTES[Math.floor(Math.random()*QUOTES.length)];
+  document.getElementById('quoteBar').textContent=q;
+}
+
+// ========== NAVIGATION ==========
+function switchTab(id){
+  var tabs=document.querySelectorAll('.tab-content');
+  for(var i=0;i<tabs.length;i++)tabs[i].classList.remove('active');
+  document.getElementById('tab-'+id).classList.add('active');
+  var btns=document.querySelectorAll('.tab-btn');
+  for(var i=0;i<btns.length;i++){
+    btns[i].classList.remove('active');
+    if(btns[i].getAttribute('onclick')==="switchTab('"+id+"')")btns[i].classList.add('active');
+  }
+  renderActiveTab();
+}
+function renderActiveTab(){
+  var active=document.querySelector('.tab-content.active');
+  var id=active?active.id.replace('tab-',''):'overview';
+  if(id==='overview')renderOverview();
+  else if(id==='bankstatements')renderBankStatements();
+  else if(id==='bankrecon')renderBankRecon();
+  else if(id==='incomestatement')renderIncomeStatement();
+  else if(id==='balancesheet')renderBalanceSheet();
+  else if(id==='cashflow')renderCashFlow();
+  else if(id==='invoices')renderInvoices();
+  else if(id==='spending')renderSpending();
+}
+
+// ========== CHART HELPER ==========
+function getTextColor(){return document.body.classList.contains('light-mode')?'#6b7280':'#9ca3af'}
+function getGridColor(){return document.body.classList.contains('light-mode')?'#e5e5e5':'#2d3139'}
+function renderChart(canvasId,type,labels,datasets,extraOpts){
+  var ctx=document.getElementById(canvasId);
+  if(!ctx)return;
+  if(charts[canvasId])charts[canvasId].destroy();
+  var opts={responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:getTextColor(),font:{size:11}}}},scales:{}};
+  if(type==='bar'||type==='line'){
+    opts.scales.x={ticks:{color:getTextColor(),font:{size:10}},grid:{color:getGridColor()}};
+    opts.scales.y={ticks:{color:getTextColor(),font:{size:10}},grid:{color:getGridColor()}};
+  }
+  if(extraOpts){
+    if(extraOpts.indexAxis)opts.indexAxis=extraOpts.indexAxis;
+    if(extraOpts.stacked){opts.scales.x={stacked:true,ticks:{color:getTextColor()},grid:{color:getGridColor()}};opts.scales.y={stacked:true,ticks:{color:getTextColor()},grid:{color:getGridColor()}};}
+    if(extraOpts.aspectRatio)opts.aspectRatio=extraOpts.aspectRatio;
+    if(extraOpts.noScales){opts.scales={}}
+    if(extraOpts.yCallback){
+      if(!opts.scales.y)opts.scales.y={};
+      opts.scales.y.ticks=opts.scales.y.ticks||{};
+      opts.scales.y.ticks.callback=extraOpts.yCallback;
+    }
+  }
+  charts[canvasId]=new Chart(ctx,{type:type,data:{labels:labels,datasets:datasets},options:opts});
+}
+
+// ========== MODAL ==========
+function openModal(title,body){
+  document.getElementById('modalTitle').textContent=title;
+  document.getElementById('modalBody').innerHTML=body;
+  document.getElementById('drillModal').classList.add('open');
+}
+function closeModal(){document.getElementById('drillModal').classList.remove('open')}
+
+// ========== OVERVIEW ==========
+function renderOverview(){
+  var curMonth=getCurrentMonth();
+  var fyMonths=getFYMonths();
+
+  // Monthly income/expenses (current month)
+  var mInc=0,mExp=0;
+  for(var i=0;i<TXN.length;i++){
+    if((TXN[i].date||'').substring(0,7)===curMonth){
+      var a=Math.abs(TXN[i].amount||0);
+      if((TXN[i].amount||0)>0)mInc+=a;else mExp+=a;
+    }
+  }
+
+  // YTD
+  var ytdInc=0,ytdExp=0;
+  var fyStart=fyMonths[0];
+  var fyEnd=fyMonths[11];
+  for(var i=0;i<TXN.length;i++){
+    var ym=(TXN[i].date||'').substring(0,7);
+    if(ym>=fyStart&&ym<=fyEnd){
+      var a=Math.abs(TXN[i].amount||0);
+      if((TXN[i].amount||0)>0)ytdInc+=a;else ytdExp+=a;
+    }
+  }
+
+  // Total bank balance
+  var totalBal=0;
+  if(RECON.accounts&&RECON.accounts.Honeybird){
+    for(var acct in RECON.accounts.Honeybird){
+      var info=RECON.accounts.Honeybird[acct];
+      if(!isLiability(info))totalBal+=(info.statement_closing_balance||0);
+    }
+  }
+
+  var kpis=[
+    {l:'Total Bank Balance',v:fmt(totalBal),c:totalBal>=0?'green':'red',drill:'balance'},
+    {l:'Monthly Income',v:fmt(mInc),c:'green',drill:'monthly_income'},
+    {l:'Monthly Expenses',v:fmt(mExp),c:'red',drill:'monthly_expenses'},
+    {l:'YTD Income',v:fmt(ytdInc),c:'green',drill:null},
+    {l:'YTD Expenses',v:fmt(ytdExp),c:'red',drill:null},
+    {l:'YTD Net P/L',v:fmt(ytdInc-ytdExp),c:(ytdInc-ytdExp)>=0?'green':'red',drill:null}
+  ];
+  var h='';
+  for(var i=0;i<kpis.length;i++){
+    var k=kpis[i];
+    var onclick=k.drill?'onclick="drillKpi(\\''+k.drill+'\\')"':'';
+    h+='<div class="kpi" '+onclick+'><div class="label">'+k.l+'</div><div class="value '+k.c+'">'+k.v+'</div></div>';
+  }
+  document.getElementById('kpiGrid').innerHTML=h;
+
+  // Data quality
+  var catCount=0;
+  for(var i=0;i<TXN.length;i++){
+    if(TXN[i].category&&TXN[i].category!=='Other'&&TXN[i].category!=='Uncategorized'&&TXN[i].category!=='Other Expenses'&&TXN[i].category!=='Other Income')catCount++;
+  }
+  var pct=TXN.length>0?Math.round(catCount/TXN.length*100):0;
+  var reconAccts=RECON.accounts&&RECON.accounts.Honeybird?Object.keys(RECON.accounts.Honeybird).length:0;
+  var reconOk=0;
+  if(RECON.accounts&&RECON.accounts.Honeybird){
+    for(var a in RECON.accounts.Honeybird){if(RECON.accounts.Honeybird[a].reconciled)reconOk++;}
+  }
+  var reconPct=reconAccts>0?Math.round(reconOk/reconAccts*100):0;
+  document.getElementById('dataQuality').innerHTML='<h3 style="color:var(--accent);margin-bottom:12px">Data Quality 📊</h3>'+
+    '<div style="margin-bottom:8px"><span style="color:var(--text2)">Transactions: </span><span style="color:var(--text)"><b>'+TXN.length+'</b></span></div>'+
+    '<div style="margin-bottom:8px"><span style="color:var(--text2)">Categorised: </span><span style="color:var(--text)"><b>'+pct+'%</b></span> ('+catCount+'/'+TXN.length+')</div>'+
+    '<div style="margin-bottom:8px"><span style="color:var(--text2)">Reconciled: </span><span style="font-weight:700;color:'+(reconPct===100?'var(--green)':'var(--red)')+'">'+reconPct+'%</span> ('+reconOk+'/'+reconAccts+')</div>'+
+    '<div><span style="color:var(--text2)">Invoices: </span><span style="color:var(--text)"><b>'+INVOICES.length+'</b></span></div>';
+
+  // Entity details
+  var ent=ENTITY.Honeybird||{};
+  var prevNames=(ent.previous_names||[]).join(' → ');
+  var acctRows='';
+  var ba=ent.bank_accounts||[];
+  for(var i=0;i<ba.length;i++){
+    acctRows+='<tr><td>'+ba[i].bank+'</td><td>'+ba[i].account_number+'</td><td>'+ba[i].account_type+'</td></tr>';
+  }
+  document.getElementById('entityDetails').innerHTML='<h3 style="color:var(--accent);margin-bottom:12px">Entity Details 🐝</h3>'+
+    '<div class="info-grid" style="margin-bottom:16px">'+
+    '<div class="lbl">Legal Name</div><div class="val">'+(ent.legal_name||'')+'</div>'+
+    '<div class="lbl">Registration</div><div class="val">'+(ent.registration_number||'')+'</div>'+
+    '<div class="lbl">VAT Number</div><div class="val">'+(ent.vat_number||'')+(ent.vat_registered?' ✓':' ✗')+'</div>'+
+    '<div class="lbl">Income Tax</div><div class="val">'+(ent.income_tax_number||'')+'</div>'+
+    '<div class="lbl">FYE</div><div class="val">'+(ent.financial_year_end||'')+'</div>'+
+    '<div class="lbl">Registered</div><div class="val">'+(ent.date_of_registration||'')+'</div>'+
+    '<div class="lbl">Address</div><div class="val">'+(ent.address||'')+'</div>'+
+    '<div class="lbl">Previous Names</div><div class="val prev-name">'+prevNames+'</div>'+
+    '</div>'+
+    '<table><tr><th>Bank</th><th>Account</th><th>Type</th></tr>'+acctRows+'</table>';
+
+  // 12-month trend chart
+  var mLabels=[],incTrend=[],expTrend=[];
+  for(var mi=0;mi<fyMonths.length;mi++){
+    mLabels.push(getMonthLabel(fyMonths[mi]));
+    var mI=0,mE=0;
+    for(var i=0;i<TXN.length;i++){
+      if((TXN[i].date||'').substring(0,7)===fyMonths[mi]){
+        var a=Math.abs(TXN[i].amount||0);
+        if((TXN[i].amount||0)>0)mI+=a;else mE+=a;
+      }
+    }
+    incTrend.push(Math.round(mI));expTrend.push(Math.round(mE));
+  }
+  renderChart('chartTrend','line',mLabels,[
+    {label:'Income',data:incTrend,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.1)',fill:true,tension:0.3},
+    {label:'Expenses',data:expTrend,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',fill:true,tension:0.3}
+  ],{aspectRatio:1.8});
+
+  // Expense categories donut
+  var catTotals={};
+  for(var i=0;i<TXN.length;i++){
+    if((TXN[i].amount||0)<0){
+      var cat=TXN[i].category||'Other Expenses';
+      catTotals[cat]=(catTotals[cat]||0)+Math.abs(TXN[i].amount);
+    }
+  }
+  var sorted=Object.keys(catTotals).sort(function(a,b){return catTotals[b]-catTotals[a]}).slice(0,6);
+  var catColors=['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#ec4899'];
+  renderChart('chartExpCat','doughnut',sorted,
+    [{data:sorted.map(function(c){return Math.round(catTotals[c])}),backgroundColor:catColors}],
+    {noScales:true,aspectRatio:1.3});
+}
+
+// ========== KPI DRILL-DOWN ==========
+window.drillKpi=function(type){
+  if(type==='balance'){
+    var h='<table><tr><th>Bank</th><th>Account</th><th>Type</th><th>Balance</th></tr>';
+    if(RECON.accounts&&RECON.accounts.Honeybird){
+      for(var acct in RECON.accounts.Honeybird){
+        var info=RECON.accounts.Honeybird[acct];
+        h+='<tr><td>'+(info.bank||'')+'</td><td>'+acct+'</td><td>'+(info.account_type||'')+'</td><td style="color:var(--green)">'+fmt(info.statement_closing_balance||0)+'</td></tr>';
+      }
+    }
+    h+='</table>';
+    openModal('Bank Balances — Breakdown',h);
+  }else if(type==='monthly_income'||type==='monthly_expenses'){
+    var curMonth=getCurrentMonth();
+    var isInc=type==='monthly_income';
+    var byBank={};
+    for(var i=0;i<TXN.length;i++){
+      if((TXN[i].date||'').substring(0,7)===curMonth){
+        if(isInc&&(TXN[i].amount||0)>0){
+          var b=TXN[i].bank||'Unknown';
+          byBank[b]=(byBank[b]||0)+Math.abs(TXN[i].amount);
+        }else if(!isInc&&(TXN[i].amount||0)<0){
+          var b=TXN[i].bank||'Unknown';
+          byBank[b]=(byBank[b]||0)+Math.abs(TXN[i].amount);
+        }
+      }
+    }
+    var h='<table><tr><th>Bank</th><th>Amount</th></tr>';
+    for(var b in byBank){
+      h+='<tr><td>'+b+'</td><td>'+fmt(byBank[b])+'</td></tr>';
+    }
+    h+='</table>';
+    openModal(isInc?'Monthly Income — Breakdown':'Monthly Expenses — Breakdown',h);
+  }
+};
+
+// ========== BANK STATEMENTS ==========
+function renderBankStatements(){
+  var acctFilter=document.getElementById('bsAccount').value;
+  var catFilter=document.getElementById('bsCategory').value;
+  var filtered=TXN.slice();
+  if(acctFilter)filtered=filtered.filter(function(t){return t.account===acctFilter});
+  if(catFilter)filtered=filtered.filter(function(t){return t.category===catFilter});
+  filtered.sort(function(a,b){return(b.date||'').localeCompare(a.date||'')});
+
+  // Populate category dropdown
+  var cats={};for(var i=0;i<TXN.length;i++){var c=TXN[i].category||'Uncategorized';cats[c]=true;}
+  var catSel=document.getElementById('bsCategory');
+  var curCat=catSel.value;
+  catSel.innerHTML='<option value="">All Categories</option>';
+  var catKeys=Object.keys(cats).sort();
+  for(var i=0;i<catKeys.length;i++){
+    var o=document.createElement('option');o.value=catKeys[i];o.textContent=catKeys[i];
+    if(catKeys[i]===curCat)o.selected=true;
+    catSel.appendChild(o);
+  }
+
+  var total=filtered.length;
+  var pages=Math.ceil(total/BS_PER_PAGE)||1;
+  if(bsPage>pages)bsPage=pages;
+  var start=(bsPage-1)*BS_PER_PAGE;
+  var pageData=filtered.slice(start,start+BS_PER_PAGE);
+
+  var h='<table><tr><th>Date</th><th>Bank</th><th>Account</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th><th>Category</th></tr>';
+  if(pageData.length===0){
+    h+='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text2)">No transactions yet — import bank statements to get started 🐝</td></tr>';
+  }
+  for(var i=0;i<pageData.length;i++){
+    var t=pageData[i];
+    var amt=t.amount||0;
+    var debit=amt<0?fmt(Math.abs(amt)):'';
+    var credit=amt>0?fmt(amt):'';
+    h+='<tr><td>'+(t.date||'')+'</td><td>'+(t.bank||'')+'</td><td>'+(t.account||'')+'</td><td>'+(t.description||'')+'</td>';
+    h+='<td style="color:var(--red)">'+debit+'</td><td style="color:var(--green)">'+credit+'</td>';
+    h+='<td>'+fmt(t.balance)+'</td><td>'+(t.category||'')+'</td></tr>';
+  }
+  h+='</table>';
+  document.getElementById('bsTable').innerHTML=h;
+
+  // Pagination
+  var ph='';
+  if(pages>1){
+    ph+='<button onclick="bsPage=1;renderBankStatements()">&laquo;</button>';
+    ph+='<button onclick="if(bsPage>1){bsPage--;renderBankStatements()}">&lsaquo;</button>';
+    ph+='<span style="color:var(--text2);font-size:12px">Page '+bsPage+' of '+pages+' ('+total+' rows)</span>';
+    ph+='<button onclick="if(bsPage<'+pages+'){bsPage++;renderBankStatements()}">&rsaquo;</button>';
+    ph+='<button onclick="bsPage='+pages+';renderBankStatements()">&raquo;</button>';
+  }else{
+    ph='<span style="color:var(--text2);font-size:12px">'+total+' transactions</span>';
+  }
+  document.getElementById('bsPagination').innerHTML=ph;
+}
+
+// ========== BANK RECON ==========
+function renderBankRecon(){
+  var h='<h3 style="color:var(--accent);margin-bottom:16px">Bank Reconciliation — Honeybird</h3>';
+  h+='<table class="recon-table"><tr><th>Bank</th><th>Account</th><th>Type</th><th>Statement Balance</th><th>Book Balance</th><th>Difference</th><th>Txns</th><th>Latest Date</th><th>Status</th></tr>';
+  if(RECON.accounts&&RECON.accounts.Honeybird){
+    for(var acct in RECON.accounts.Honeybird){
+      var info=RECON.accounts.Honeybird[acct];
+      var diff=info.difference||0;
+      var statusClass=info.reconciled?'badge-green':'badge-red';
+      var statusText=info.reconciled?'Reconciled':'Mismatch';
+      h+='<tr>';
+      h+='<td>'+(info.bank||'')+'</td>';
+      h+='<td>'+acct+'</td>';
+      h+='<td>'+(info.account_type||'')+'</td>';
+      h+='<td>'+fmt(info.statement_closing_balance||0)+'</td>';
+      h+='<td>'+fmt(info.calculated_balance||0)+'</td>';
+      h+='<td style="color:'+(diff===0?'var(--green)':'var(--red)')+'">'+fmt(diff)+'</td>';
+      h+='<td>'+(info.transaction_count||0)+'</td>';
+      h+='<td>'+(info.latest_statement_date||'—')+'</td>';
+      h+='<td><span class="badge '+statusClass+'">'+statusText+'</span></td>';
+      h+='</tr>';
+    }
+  }else{
+    h+='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">No reconciliation data yet</td></tr>';
+  }
+  h+='</table>';
+  document.getElementById('reconTable').innerHTML=h;
+}
+
+// ========== INCOME STATEMENT ==========
+function renderIncomeStatement(){
+  var fyMonths=getFYMonths();
+  // Collect revenue and expense categories by month
+  var revCats={},expCats={};
+  for(var i=0;i<TXN.length;i++){
+    var t=TXN[i];
+    var ym=(t.date||'').substring(0,7);
+    var cat=t.category||'Uncategorized';
+    if((t.amount||0)>0){
+      if(!revCats[cat])revCats[cat]={};
+      revCats[cat][ym]=(revCats[cat][ym]||0)+Math.abs(t.amount);
+    }else if((t.amount||0)<0){
+      if(!expCats[cat])expCats[cat]={};
+      expCats[cat][ym]=(expCats[cat][ym]||0)+Math.abs(t.amount);
+    }
+  }
+
+  var h='<h3 style="color:var(--accent);margin-bottom:16px">Income Statement — FY ' + fyMonths[0].substring(0,4) + '/' + fyMonths[11].substring(0,4) + '</h3>';
+  h+='<div class="tbl-scroll"><table><tr><th>Category</th>';
+  for(var m=0;m<fyMonths.length;m++)h+='<th style="text-align:right">'+getMonthLabel(fyMonths[m])+'</th>';
+  h+='<th style="text-align:right;color:var(--accent)">YTD</th></tr>';
+
+  // Revenue section
+  h+='<tr style="background:var(--bg3)"><td colspan="'+(fyMonths.length+2)+'" style="color:var(--green);font-weight:700;padding:10px 12px">Revenue</td></tr>';
+  var revTotal={};
+  var revKeys=Object.keys(revCats).sort();
+  for(var r=0;r<revKeys.length;r++){
+    var cat=revKeys[r];
+    var ytd=0;
+    h+='<tr><td>'+cat+'</td>';
+    for(var m=0;m<fyMonths.length;m++){
+      var val=revCats[cat][fyMonths[m]]||0;
+      ytd+=val;
+      revTotal[fyMonths[m]]=(revTotal[fyMonths[m]]||0)+val;
+      h+='<td style="text-align:right">'+(val>0?fmt(val):'—')+'</td>';
+    }
+    h+='<td style="text-align:right;font-weight:600">'+fmt(ytd)+'</td></tr>';
+  }
+  // Revenue total
+  var totalRevYtd=0;
+  h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Revenue</td>';
+  for(var m=0;m<fyMonths.length;m++){
+    var val=revTotal[fyMonths[m]]||0;totalRevYtd+=val;
+    h+='<td style="text-align:right;color:var(--green)">'+fmt(val)+'</td>';
+  }
+  h+='<td style="text-align:right;color:var(--green)">'+fmt(totalRevYtd)+'</td></tr>';
+
+  // Expense section
+  h+='<tr style="background:var(--bg3)"><td colspan="'+(fyMonths.length+2)+'" style="color:var(--red);font-weight:700;padding:10px 12px">Expenses</td></tr>';
+  var expTotal={};
+  var expKeys=Object.keys(expCats).sort();
+  for(var r=0;r<expKeys.length;r++){
+    var cat=expKeys[r];
+    var ytd=0;
+    h+='<tr><td>'+cat+'</td>';
+    for(var m=0;m<fyMonths.length;m++){
+      var val=expCats[cat][fyMonths[m]]||0;
+      ytd+=val;
+      expTotal[fyMonths[m]]=(expTotal[fyMonths[m]]||0)+val;
+      h+='<td style="text-align:right">'+(val>0?fmt(val):'—')+'</td>';
+    }
+    h+='<td style="text-align:right;font-weight:600">'+fmt(ytd)+'</td></tr>';
+  }
+  // Expense total
+  var totalExpYtd=0;
+  h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Expenses</td>';
+  for(var m=0;m<fyMonths.length;m++){
+    var val=expTotal[fyMonths[m]]||0;totalExpYtd+=val;
+    h+='<td style="text-align:right;color:var(--red)">'+fmt(val)+'</td>';
+  }
+  h+='<td style="text-align:right;color:var(--red)">'+fmt(totalExpYtd)+'</td></tr>';
+
+  // Net P/L
+  var netYtd=totalRevYtd-totalExpYtd;
+  h+='<tr style="border-top:3px double var(--accent);font-weight:700;font-size:13px"><td>Net Profit / (Loss)</td>';
+  for(var m=0;m<fyMonths.length;m++){
+    var val=(revTotal[fyMonths[m]]||0)-(expTotal[fyMonths[m]]||0);
+    h+='<td style="text-align:right;color:'+(val>=0?'var(--green)':'var(--red)')+'">'+fmt(val)+'</td>';
+  }
+  h+='<td style="text-align:right;color:'+(netYtd>=0?'var(--green)':'var(--red)')+'">'+fmt(netYtd)+'</td></tr>';
+
+  if(TXN.length===0){
+    h+='<tr><td colspan="'+(fyMonths.length+2)+'" style="text-align:center;padding:40px;color:var(--text2)">No transactions yet — import bank statements to populate 🐝</td></tr>';
+  }
+  h+='</table></div>';
+  document.getElementById('incomeStmt').innerHTML=h;
+}
+
+// ========== BALANCE SHEET ==========
+function renderBalanceSheet(){
+  // Assets = bank balances (operating)
+  var totalAssets=0;
+  var assetRows='';
+  if(RECON.accounts&&RECON.accounts.Honeybird){
+    for(var acct in RECON.accounts.Honeybird){
+      var info=RECON.accounts.Honeybird[acct];
+      if(!isLiability(info)){
+        var bal=info.statement_closing_balance||0;
+        totalAssets+=bal;
+        assetRows+='<tr><td style="padding-left:24px">'+(info.bank||'')+' ('+acct+')</td><td style="text-align:right">'+fmt(bal)+'</td></tr>';
+      }
+    }
+  }
+
+  // Liabilities
+  var totalLiabilities=0;
+  var liabRows='';
+  if(RECON.accounts&&RECON.accounts.Honeybird){
+    for(var acct in RECON.accounts.Honeybird){
+      var info=RECON.accounts.Honeybird[acct];
+      if(isLiability(info)){
+        var bal=Math.abs(info.statement_closing_balance||0);
+        totalLiabilities+=bal;
+        liabRows+='<tr><td style="padding-left:24px">'+(info.bank||'')+' ('+acct+')</td><td style="text-align:right">'+fmt(bal)+'</td></tr>';
+      }
+    }
+  }
+
+  // Equity = YTD P/L (retained earnings)
+  var ytdInc=0,ytdExp=0;
+  var fyMonths=getFYMonths();
+  var fyStart=fyMonths[0];var fyEnd=fyMonths[11];
+  for(var i=0;i<TXN.length;i++){
+    var ym=(TXN[i].date||'').substring(0,7);
+    if(ym>=fyStart&&ym<=fyEnd){
+      if((TXN[i].amount||0)>0)ytdInc+=Math.abs(TXN[i].amount);
+      else ytdExp+=Math.abs(TXN[i].amount);
+    }
+  }
+  var retainedEarnings=ytdInc-ytdExp;
+  var totalEquity=retainedEarnings;
+  var totalLE=totalLiabilities+totalEquity;
+  var diff=Math.round((totalAssets-totalLE)*100)/100;
+  var balanced=Math.abs(diff)<0.01;
+
+  // Banner
+  var banner='';
+  if(balanced){
+    banner='<div class="success-banner">✅ Perfectly balanced, as all things should be.</div>';
+  }else{
+    banner='<div class="error-banner">⚠️ This is not a Balance Sheet... this is just a Sheet. Out of balance by '+fmt(diff)+'</div>';
+  }
+  document.getElementById('bsBanner').innerHTML=banner;
+
+  var h='<h3 style="color:var(--accent);margin-bottom:16px">Balance Sheet — Honeybird</h3>';
+  h+='<table>';
+  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--green);font-weight:700;padding:10px 12px">Assets</td></tr>';
+  h+=assetRows||'<tr><td colspan="2" style="padding-left:24px;color:var(--text2)">No assets recorded</td></tr>';
+  h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Assets</td><td style="text-align:right;color:var(--green)">'+fmt(totalAssets)+'</td></tr>';
+
+  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--red);font-weight:700;padding:10px 12px">Liabilities</td></tr>';
+  h+=liabRows||'<tr><td colspan="2" style="padding-left:24px;color:var(--text2)">No liabilities</td></tr>';
+  h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Liabilities</td><td style="text-align:right;color:var(--red)">'+fmt(totalLiabilities)+'</td></tr>';
+
+  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--blue);font-weight:700;padding:10px 12px">Equity</td></tr>';
+  h+='<tr><td style="padding-left:24px">Retained Earnings (YTD P/L)</td><td style="text-align:right">'+fmt(retainedEarnings)+'</td></tr>';
+  h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Equity</td><td style="text-align:right;color:var(--blue)">'+fmt(totalEquity)+'</td></tr>';
+
+  h+='<tr style="border-top:3px double var(--accent);font-weight:700;font-size:13px"><td>Liabilities + Equity</td><td style="text-align:right;color:var(--accent)">'+fmt(totalLE)+'</td></tr>';
+  h+='</table>';
+  document.getElementById('balanceSheetContent').innerHTML=h;
+}
+
+// ========== CASH FLOW ==========
+function renderCashFlow(){
+  var fyMonths=getFYMonths();
+  var mLabels=[],inflows=[],outflows=[],running=[];
+  var cumulative=0;
+  for(var m=0;m<fyMonths.length;m++){
+    mLabels.push(getMonthLabel(fyMonths[m]));
+    var mIn=0,mOut=0;
+    for(var i=0;i<TXN.length;i++){
+      if((TXN[i].date||'').substring(0,7)===fyMonths[m]){
+        if((TXN[i].amount||0)>0)mIn+=Math.abs(TXN[i].amount);
+        else mOut+=Math.abs(TXN[i].amount);
+      }
+    }
+    cumulative+=mIn-mOut;
+    inflows.push(Math.round(mIn));
+    outflows.push(Math.round(mOut));
+    running.push(Math.round(cumulative));
+  }
+
+  renderChart('chartCashFlow','bar',mLabels,[
+    {label:'Inflows',data:inflows,backgroundColor:'rgba(16,185,129,0.7)',order:2},
+    {label:'Outflows',data:outflows,backgroundColor:'rgba(239,68,68,0.7)',order:2},
+    {label:'Running Balance',data:running,type:'line',borderColor:'#f59e0b',backgroundColor:'transparent',borderWidth:2,pointRadius:3,order:1}
+  ],{aspectRatio:2,yCallback:function(v){return fmt(v)}});
+
+  // Table
+  var h='<h3 style="color:var(--accent);margin-bottom:16px">Monthly Cash Flow Detail</h3>';
+  h+='<div class="tbl-scroll"><table><tr><th>Month</th><th style="text-align:right">Inflows</th><th style="text-align:right">Outflows</th><th style="text-align:right">Net</th><th style="text-align:right">Cumulative</th></tr>';
+  for(var m=0;m<mLabels.length;m++){
+    var net=inflows[m]-outflows[m];
+    h+='<tr><td>'+mLabels[m]+'</td>';
+    h+='<td style="text-align:right;color:var(--green)">'+fmt(inflows[m])+'</td>';
+    h+='<td style="text-align:right;color:var(--red)">'+fmt(outflows[m])+'</td>';
+    h+='<td style="text-align:right;color:'+(net>=0?'var(--green)':'var(--red)')+'">'+fmt(net)+'</td>';
+    h+='<td style="text-align:right">'+fmt(running[m])+'</td></tr>';
+  }
+  h+='</table></div>';
+  document.getElementById('cashFlowTable').innerHTML=h;
+}
+
+// ========== INVOICES ==========
+function filterInvoices(type){
+  currentInvFilter=type;
+  var btns=document.querySelectorAll('#tab-invoices .sub-btn');
+  for(var i=0;i<btns.length;i++){
+    btns[i].classList.remove('active');
+    if(btns[i].getAttribute('onclick')==="filterInvoices('"+type+"')")btns[i].classList.add('active');
+  }
+  renderInvoices();
+}
+function renderInvoices(){
+  var filtered=INVOICES.filter(function(inv){
+    if(currentInvFilter==='matched')return inv.matched;
+    if(currentInvFilter==='unmatched')return !inv.matched;
+    return true;
+  });
+
+  var h='<table><tr><th>Filename</th><th>Invoice No.</th><th>Vendor</th><th style="text-align:right">Excl. VAT</th><th style="text-align:right">VAT (15%)</th><th style="text-align:right">Incl. VAT</th><th>Type</th><th>Matched</th><th>Status</th></tr>';
+  if(filtered.length===0){
+    h+='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">No invoices '+(currentInvFilter!=='all'?'matching filter':'yet')+'</td></tr>';
+  }
+  for(var i=0;i<filtered.length;i++){
+    var inv=filtered[i];
+    var matchBadge=inv.matched?'<span class="badge badge-green">Yes</span>':'<span class="badge badge-red">No</span>';
+    h+='<tr>';
+    h+='<td>'+(inv.filename||'')+'</td>';
+    h+='<td>'+(inv.invoice_number||'')+'</td>';
+    h+='<td>'+(inv.vendor||'—')+'</td>';
+    h+='<td style="text-align:right">'+fmt(inv.amount_excl_vat)+'</td>';
+    h+='<td style="text-align:right">'+fmt(inv.vat_amount)+'</td>';
+    h+='<td style="text-align:right">'+fmt(inv.amount_incl_vat)+'</td>';
+    h+='<td>'+(inv.file_type||'')+'</td>';
+    h+='<td>'+matchBadge+'</td>';
+    h+='<td>'+(inv.status||'')+'</td>';
+    h+='</tr>';
+  }
+  h+='</table>';
+  document.getElementById('invTable').innerHTML=h;
+}
+
+// ========== SPENDING TRACKER ==========
+function renderSpending(){
+  // Expense breakdown by category
+  var catTotals={};
+  var fyMonths=getFYMonths();
+  var monthlyCats={};
+
+  for(var i=0;i<TXN.length;i++){
+    if((TXN[i].amount||0)<0){
+      var cat=TXN[i].category||'Other Expenses';
+      var ym=(TXN[i].date||'').substring(0,7);
+      catTotals[cat]=(catTotals[cat]||0)+Math.abs(TXN[i].amount);
+      if(!monthlyCats[cat])monthlyCats[cat]={};
+      monthlyCats[cat][ym]=(monthlyCats[cat][ym]||0)+Math.abs(TXN[i].amount);
+    }
+  }
+
+  var sorted=Object.keys(catTotals).sort(function(a,b){return catTotals[b]-catTotals[a]}).slice(0,8);
+  var catColors=['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
+
+  renderChart('chartSpendPie','doughnut',sorted,
+    [{data:sorted.map(function(c){return Math.round(catTotals[c])}),backgroundColor:catColors}],
+    {noScales:true,aspectRatio:1.2});
+
+  // Stacked bar by month
+  var mLabels=[];
+  for(var m=0;m<fyMonths.length;m++)mLabels.push(getMonthLabel(fyMonths[m]));
+  var datasets=[];
+  for(var c=0;c<sorted.length;c++){
+    var data=[];
+    for(var m=0;m<fyMonths.length;m++){
+      data.push(Math.round((monthlyCats[sorted[c]]||{})[fyMonths[m]]||0));
+    }
+    datasets.push({label:sorted[c],data:data,backgroundColor:catColors[c%catColors.length]});
+  }
+  renderChart('chartSpendStack','bar',mLabels,datasets,{stacked:true,aspectRatio:1.5});
+}
+
+// ========== INIT ==========
+rotateQuote();
+setInterval(rotateQuote,8000);
+renderOverview();
+</script>
+"""
+
+
+def build():
+    print("=" * 60)
+    print("  Honeybird Private Equity Dashboard Builder")
+    print("=" * 60)
+
+    transactions = load_json('transactions.json', [])
+    recon = load_json('recon.json', {"accounts": {"Honeybird": {}}})
+    invoices = load_json('invoices.json', [])
+    registry = load_json('entity_registry.json', {})
+
+    print(f"[DATA] Transactions: {len(transactions)}")
+    print(f"[DATA] Invoices: {len(invoices)}")
+    print(f"[DATA] Accounts in recon: {len(recon.get('accounts', {}).get('Honeybird', {}))}")
+
+    # Validate
+    transactions = validate_account_ownership(transactions, registry)
+
+    build_date = datetime.now().strftime('%Y-%m-%d')
+
+    # Build HTML
+    html = generate_html_structure(build_date)
+    html += generate_javascript(transactions, recon, invoices, registry, build_date)
+    html += "\n</body>\n</html>"
+
+    with open(OUTPUT_PATH, 'w') as f:
+        f.write(html)
+
+    size_kb = os.path.getsize(OUTPUT_PATH) / 1024
+    print(f"\n[BUILD] Generated {OUTPUT_PATH}")
+    print(f"[BUILD] Size: {size_kb:.1f} KB")
+    print(f"[BUILD] Date: {build_date}")
+    print("=" * 60)
+
+
+if __name__ == '__main__':
+    build()
