@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>Honeybird Private Equity Dashboard</title>
-<link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23f59e0b'/%3E%3Ctext x='50' y='70' font-size='55' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'%3EH%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -95,30 +94,89 @@ select:focus,input:focus{border-color:var(--accent);outline:none}
 .coming-soon h2{font-size:48px;margin-bottom:16px}
 .coming-soon p{color:var(--text2);font-size:18px;max-width:500px;line-height:1.6}
 .prev-name{color:var(--orange);font-size:11px;font-style:italic}
+/* === TABLET (768px) === */
 @media(max-width:768px){
-  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  body{padding:10px}
+  .header{padding:12px 16px;flex-direction:column;align-items:flex-start;gap:10px}
+  .header h1{font-size:20px}
+  .header h1 span.bee{font-size:22px}
+  .entity-info{font-size:10px}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .kpi{padding:14px}
+  .kpi .label{font-size:11px}
+  .kpi .value{font-size:18px}
   .grid-2,.grid-3{grid-template-columns:1fr}
-  .header{padding:12px 16px}
-  .header h1{font-size:18px}
-  .tab-btn{font-size:11px;padding:8px 10px}
-  .kpi .value{font-size:16px}
-  .filter-row{flex-direction:column}
-  .filter-row select,.filter-row input{width:100%}
+  .tab-bar{padding:0 8px;gap:2px;scroll-snap-type:x mandatory}
+  .tab-btn{font-size:12px;padding:10px 14px;min-height:44px;scroll-snap-align:start}
+  .filter-row{flex-direction:column;gap:8px}
+  .filter-row select,.filter-row input{width:100%;min-height:44px;font-size:14px}
+  .card{padding:14px;margin-bottom:12px}
   table{font-size:11px}
-  th,td{padding:6px 8px}
+  th,td{padding:8px 10px}
+  .chart-box{padding:14px}
   .chart-box canvas{max-height:250px!important}
-  .chart-box{padding:12px}
+  .chart-box h3{font-size:13px}
   .info-grid{grid-template-columns:1fr}
-  .recon-table{font-size:10px}
-  .recon-table th,.recon-table td{padding:6px 8px}
+  .recon-table{font-size:11px}
+  .recon-table th,.recon-table td{padding:8px 10px}
+  .sub-tabs{flex-wrap:wrap}
+  .sub-btn{min-height:40px;padding:8px 16px;font-size:13px}
+  .modal{max-width:95vw;padding:16px}
+  .btn{min-height:44px;padding:10px 20px;font-size:14px}
+  .theme-toggle{min-height:40px;padding:8px 16px}
+  .pagination button{min-height:40px;min-width:40px;font-size:14px}
+  select{-webkit-appearance:none;appearance:none}
+  .tbl-scroll{margin:0 -14px;padding:0 14px}
 }
+/* === MOBILE (480px) === */
 @media(max-width:480px){
-  body{padding:8px}
-  .kpi-grid{grid-template-columns:1fr}
-  .tab-btn{font-size:10px;padding:6px 8px}
+  body{padding:6px}
+  .header{padding:10px 12px;gap:8px}
+  .header h1{font-size:17px}
+  .header h1 span.bee{font-size:20px}
+  .entity-info{font-size:9px}
+  .quote-bar{font-size:11px;padding:4px 10px}
+  .kpi-grid{grid-template-columns:1fr;gap:6px}
+  .kpi{padding:12px;display:flex;justify-content:space-between;align-items:center}
+  .kpi .label{font-size:12px;margin-bottom:0}
+  .kpi .value{font-size:18px}
+  .tab-bar{gap:1px;margin-bottom:12px;padding:0 4px}
+  .tab-btn{font-size:11px;padding:10px 10px;min-height:44px;white-space:nowrap}
+  .card{padding:10px;border-radius:8px}
+  .chart-box{padding:10px;border-radius:8px}
   .chart-box canvas{max-height:200px!important}
-  .kpi .value{font-size:14px}
-  .header h1{font-size:16px}
+  .chart-box h3{font-size:12px;margin-bottom:8px}
+  table{font-size:10px}
+  th{padding:8px 6px;font-size:10px}
+  td{padding:6px}
+  .recon-table{font-size:9px}
+  .recon-table th,.recon-table td{padding:6px 4px}
+  .info-grid{gap:4px;font-size:12px}
+  .modal{padding:12px;border-radius:8px}
+  .modal h3{font-size:16px}
+  .coming-soon h2{font-size:36px}
+  .coming-soon p{font-size:14px}
+  .pagination{gap:4px}
+  .pagination button{min-height:36px;min-width:36px;font-size:12px;padding:4px 8px}
+  .filter-row select,.filter-row input{font-size:16px;min-height:48px}
+  .sub-btn{min-height:44px;font-size:12px;padding:8px 12px}
+  .badge{font-size:10px;padding:2px 6px}
+  .updated{font-size:10px}
+}
+/* === SMALL MOBILE (360px) === */
+@media(max-width:360px){
+  body{padding:4px}
+  .header h1{font-size:15px}
+  .tab-btn{font-size:10px;padding:8px 7px}
+  .kpi .value{font-size:16px}
+  table{font-size:9px}
+  th,td{padding:5px 4px}
+}
+/* Touch-friendly tap targets */
+@media(hover:none) and (pointer:coarse){
+  .tab-btn,.sub-btn,.btn,.theme-toggle,.pagination button{min-height:44px}
+  select,input[type="text"],input[type="date"]{min-height:48px;font-size:16px}
+  .kpi{min-height:60px}
 }
 
 </style>
