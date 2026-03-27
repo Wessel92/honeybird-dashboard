@@ -458,25 +458,33 @@ function openModal(title,body){
 }
 function closeModal(){document.getElementById('drillModal').classList.remove('open')}
 
+// ========== BS vs IS HELPER ==========
+// CRITICAL: Only Income Statement items count for P&L / revenue / expenses.
+// Balance Sheet items (loans, shareholder contributions, interaccount transfers) are NOT income/expenses.
+function isIS(txn){return (txn.allocation||'')==='Income Statement';}
+function isBS(txn){return (txn.allocation||'')==='Balance Sheet';}
+
 // ========== OVERVIEW ==========
 function renderOverview(){
   var curMonth=getCurrentMonth();
   var fyMonths=getFYMonths();
 
-  // Monthly income/expenses (current month)
+  // Monthly income/expenses (current month) — IS items ONLY
   var mInc=0,mExp=0;
   for(var i=0;i<TXN.length;i++){
+    if(!isIS(TXN[i]))continue;
     if((TXN[i].date||'').substring(0,7)===curMonth){
       var a=Math.abs(TXN[i].amount||0);
       if((TXN[i].amount||0)>0)mInc+=a;else mExp+=a;
     }
   }
 
-  // YTD
+  // YTD — IS items ONLY
   var ytdInc=0,ytdExp=0;
   var fyStart=fyMonths[0];
   var fyEnd=fyMonths[11];
   for(var i=0;i<TXN.length;i++){
+    if(!isIS(TXN[i]))continue;
     var ym=(TXN[i].date||'').substring(0,7);
     if(ym>=fyStart&&ym<=fyEnd){
       var a=Math.abs(TXN[i].amount||0);
@@ -541,12 +549,13 @@ function renderOverview(){
   }
   document.getElementById('queriesCard').innerHTML=qh;
 
-  // 12-month trend chart
+  // 12-month trend chart — IS items ONLY
   var mLabels=[],incTrend=[],expTrend=[];
   for(var mi=0;mi<fyMonths.length;mi++){
     mLabels.push(getMonthLabel(fyMonths[mi]));
     var mI=0,mE=0;
     for(var i=0;i<TXN.length;i++){
+      if(!isIS(TXN[i]))continue;
       if((TXN[i].date||'').substring(0,7)===fyMonths[mi]){
         var a=Math.abs(TXN[i].amount||0);
         if((TXN[i].amount||0)>0)mI+=a;else mE+=a;
@@ -559,9 +568,10 @@ function renderOverview(){
     {label:'Expenses',data:expTrend,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',fill:true,tension:0.3}
   ],{aspectRatio:1.8});
 
-  // Expense categories donut
+  // Expense categories donut — IS items ONLY
   var catTotals={};
   for(var i=0;i<TXN.length;i++){
+    if(!isIS(TXN[i]))continue;
     if((TXN[i].amount||0)<0){
       var cat=TXN[i].category||'Other Expenses';
       catTotals[cat]=(catTotals[cat]||0)+Math.abs(TXN[i].amount);
@@ -591,6 +601,7 @@ window.drillKpi=function(type){
     var isInc=type==='monthly_income';
     var byBank={};
     for(var i=0;i<TXN.length;i++){
+      if(!isIS(TXN[i]))continue;
       if((TXN[i].date||'').substring(0,7)===curMonth){
         if(isInc&&(TXN[i].amount||0)>0){
           var b=TXN[i].bank||'Unknown';
@@ -699,10 +710,12 @@ function renderBankRecon(){
 // ========== INCOME STATEMENT ==========
 function renderIncomeStatement(){
   var fyMonths=getFYMonths();
-  // Collect revenue and expense categories by month
+  // Collect revenue and expense categories by month — IS ITEMS ONLY
+  // BS items (loans, shareholder contributions, interaccount transfers) are excluded
   var revCats={},expCats={};
   for(var i=0;i<TXN.length;i++){
     var t=TXN[i];
+    if(!isIS(t))continue;
     var ym=(t.date||'').substring(0,7);
     var cat=t.category||'Uncategorized';
     if((t.amount||0)>0){
@@ -931,12 +944,13 @@ function renderInvoices(){
 
 // ========== SPENDING TRACKER ==========
 function renderSpending(){
-  // Expense breakdown by category
+  // Expense breakdown by category — IS items ONLY (no BS transfers)
   var catTotals={};
   var fyMonths=getFYMonths();
   var monthlyCats={};
 
   for(var i=0;i<TXN.length;i++){
+    if(!isIS(TXN[i]))continue;
     if((TXN[i].amount||0)<0){
       var cat=TXN[i].category||'Other Expenses';
       var ym=(TXN[i].date||'').substring(0,7);
