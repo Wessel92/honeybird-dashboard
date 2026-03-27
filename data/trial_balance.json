@@ -1,0 +1,74 @@
+[
+  {
+    "account_code": "1000",
+    "account_name": "Bank - Capitec 1054023212",
+    "section": "ASSETS",
+    "debit": 67423.0,
+    "credit": 0,
+    "wp_ref": "WP - Bank Reconstruction"
+  },
+  {
+    "account_code": "3000",
+    "account_name": "Share capital / Stated capital",
+    "section": "EQUITY",
+    "debit": 0,
+    "credit": 0,
+    "wp_ref": "Query - confirm share capital"
+  },
+  {
+    "account_code": "3100",
+    "account_name": "Shareholders contributions",
+    "section": "EQUITY",
+    "debit": 0,
+    "credit": 430000.0,
+    "wp_ref": "WP - Shareholders contributions"
+  },
+  {
+    "account_code": "3200",
+    "account_name": "Retained earnings / (Accumulated loss)",
+    "section": "EQUITY",
+    "debit": 3077.0,
+    "credit": 0,
+    "wp_ref": "Per SOCI"
+  },
+  {
+    "account_code": "2000",
+    "account_name": "Loan - Rivendell Holdings",
+    "section": "LIABILITIES",
+    "debit": 0,
+    "credit": 500.0,
+    "wp_ref": "WP - Loan schedule"
+  },
+  {
+    "account_code": "2100",
+    "account_name": "Interaccount transfer - 4001830078",
+    "section": "LIABILITIES",
+    "debit": 360000.0,
+    "credit": 0,
+    "wp_ref": "WP - Interaccount"
+  },
+  {
+    "account_code": "4000",
+    "account_name": "Revenue",
+    "section": "INCOME",
+    "debit": 0,
+    "credit": 0,
+    "wp_ref": "No revenue identified"
+  },
+  {
+    "account_code": "5000",
+    "account_name": "Bank charges",
+    "section": "EXPENSES",
+    "debit": 202.0,
+    "credit": 0,
+    "wp_ref": "WP - Bank charges schedule"
+  },
+  {
+    "account_code": "5100",
+    "account_name": "Professional fees",
+    "section": "EXPENSES",
+    "debit": 2875.0,
+    "credit": 0,
+    "wp_ref": "WP - Prof fees schedule"
+  }
+]

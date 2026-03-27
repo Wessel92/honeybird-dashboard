@@ -4,35 +4,46 @@
       "80204693662": {
         "bank": "Bank Zero",
         "account_type": "Business Account",
-        "statement_closing_balance": 0,
-        "calculated_balance": 0,
-        "opening_balance": 0,
+        "statement_closing_balance": 0.0,
+        "calculated_balance": 0.0,
+        "opening_balance": 0.0,
         "reconciled": true,
-        "difference": 0,
+        "difference": 0.0,
         "transaction_count": 0,
         "latest_statement_date": ""
       },
       "1053469489": {
         "bank": "Capitec",
         "account_type": "Business Account",
-        "statement_closing_balance": 0,
-        "calculated_balance": 0,
-        "opening_balance": 0,
+        "statement_closing_balance": 0.0,
+        "calculated_balance": 0.0,
+        "opening_balance": 0.0,
         "reconciled": true,
-        "difference": 0,
+        "difference": 0.0,
         "transaction_count": 0,
         "latest_statement_date": ""
       },
       "3212": {
         "bank": "EasyEquities",
         "account_type": "Investment Account",
-        "statement_closing_balance": 0,
-        "calculated_balance": 0,
-        "opening_balance": 0,
+        "statement_closing_balance": 0.0,
+        "calculated_balance": 0.0,
+        "opening_balance": 0.0,
         "reconciled": true,
-        "difference": 0,
+        "difference": 0.0,
         "transaction_count": 0,
         "latest_statement_date": ""
+      },
+      "1054023212": {
+        "bank": "Capitec",
+        "account_type": "Business Account",
+        "statement_closing_balance": 67423.0,
+        "calculated_balance": 67423.0,
+        "opening_balance": 0.0,
+        "reconciled": true,
+        "difference": 0.0,
+        "transaction_count": 17,
+        "latest_statement_date": "2026-03-25"
       }
     }
   }

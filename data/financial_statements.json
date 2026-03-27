@@ -1,0 +1,25 @@
+{
+  "balance_sheet": {
+    "assets": [],
+    "total_assets": 67423.0,
+    "equity": [],
+    "total_equity": 426923.0,
+    "liabilities": [],
+    "total_liabilities": 360500.0,
+    "total_equity_liabilities": 787423.0,
+    "out_of_balance": -720000.0
+  },
+  "income_statement": {
+    "expenses": [
+      {
+        "name": "Bank charges",
+        "amount": -202.0
+      },
+      {
+        "name": "Professional fees",
+        "amount": -2875.0
+      }
+    ],
+    "net_loss": -3077.0
+  }
+}

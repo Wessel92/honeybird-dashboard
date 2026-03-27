@@ -1,0 +1,119 @@
+[
+  {
+    "name": "WP - LOAN FROM RIVENDELL HOLDINGS",
+    "entries": [
+      {
+        "description": "Opening balance",
+        "amount": 0.0
+      },
+      {
+        "description": "2025-11-05 - Deposit Transfer (HONEYBIRD PRIVATE EQUITY Rivendell From )",
+        "amount": 250.0
+      },
+      {
+        "description": "2025-11-07 - Transfer (HONEYBIRD PRIVATE EQUITY Rivendell From )",
+        "amount": 50.0
+      },
+      {
+        "description": "2025-12-07 - Transfer (HONEYBIRD PRIVATE EQUITY Rivendell From )",
+        "amount": 50.0
+      },
+      {
+        "description": "2026-01-07 - Transfer (HONEYBIRD PRIVATE EQUITY Rivendell From )",
+        "amount": 50.0
+      },
+      {
+        "description": "2026-02-07 - Transfer (HONEYBIRD PRIVATE EQUITY Rivendell From )",
+        "amount": 50.0
+      },
+      {
+        "description": "2026-03-07 - Transfer (HONEYBIRD PRIVATE EQUITY Rivendell From )",
+        "amount": 50.0
+      },
+      {
+        "description": "Closing balance",
+        "amount": 500.0
+      }
+    ]
+  },
+  {
+    "name": "WP - SHAREHOLDERS CONTRIBUTIONS",
+    "entries": [
+      {
+        "description": "2026-03-18 - Shareholders Contribution - Jannie Potgieter",
+        "amount": 70000.0
+      },
+      {
+        "description": "2026-03-18 - Shareholders Contribution - Rita van Biljon",
+        "amount": 300000.0
+      },
+      {
+        "description": "2026-03-25 - Shareholders Contribution - E Fair",
+        "amount": 60000.0
+      },
+      {
+        "description": "Total contributions",
+        "amount": 430000.0
+      }
+    ]
+  },
+  {
+    "name": "WP - INTERACCOUNT TRANSFER (4001830078)",
+    "entries": [
+      {
+        "description": "2026-03-25 - Db Trf Transfer To 4001830078",
+        "amount": -370000.0
+      },
+      {
+        "description": "2026-03-25 - Cr Trf transfer From 4001830078 Odendaal Kruger Prokureu",
+        "amount": 10000.0
+      },
+      {
+        "description": "Net position",
+        "amount": -360000.0
+      }
+    ]
+  },
+  {
+    "name": "WP - BANK CHARGES SCHEDULE",
+    "entries": [
+      {
+        "description": "2025-11-30 - Monthly Service Fee",
+        "amount": 50.0
+      },
+      {
+        "description": "2025-12-31 - Monthly Service Fee",
+        "amount": 50.0
+      },
+      {
+        "description": "2026-01-31 - Monthly Service Fee",
+        "amount": 50.0
+      },
+      {
+        "description": "2026-02-28 - Monthly Service Fee",
+        "amount": 50.0
+      },
+      {
+        "description": "2026-03-25 - EFT Transaction Fee",
+        "amount": 2.0
+      },
+      {
+        "description": "Total bank charges",
+        "amount": 202.0
+      }
+    ]
+  },
+  {
+    "name": "WP - PROFESSIONAL FEES",
+    "entries": [
+      {
+        "description": "2026-03-25 - Outward EFT HON10001 To 63033775040",
+        "amount": 2875.0
+      },
+      {
+        "description": "Total professional fees",
+        "amount": 2875.0
+      }
+    ]
+  }
+]

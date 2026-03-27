@@ -1,15 +1,19 @@
 [
   {
     "entity": "Honeybird",
-    "filename": "HON1.0001 - Pro Forma Invoice - 13 03 26.pdf",
+    "invoice_date": "",
     "invoice_number": "HON1.0001",
-    "vendor": "",
-    "description": "Pro Forma Invoice",
-    "amount_excl_vat": 0,
-    "vat_amount": 0,
+    "vendor": "Pro Forma",
+    "description": "HON1.0001 - Pro Forma Invoice - 13 03 26",
     "amount_incl_vat": 0,
-    "file_type": ".pdf",
+    "vat_amount": 0,
+    "amount_excl_vat": 0,
+    "category": "",
     "matched": false,
+    "bank_txn_date": "",
+    "filename": "HON1.0001 - Pro Forma Invoice - 13 03 26.pdf",
+    "allocation": "Income Statement",
+    "file_type": ".pdf",
     "status": "Filed"
   }
 ]

@@ -15,7 +15,7 @@ DATA_DIR = os.path.join(SCRIPT_DIR, 'data')
 OUTPUT_PATH = os.path.join(SCRIPT_DIR, 'index.html')
 
 # Honeybird's authoritative account numbers
-HONEYBIRD_ACCOUNTS = {'80204693662', '1053469489', '3212'}
+HONEYBIRD_ACCOUNTS = {'80204693662', '1053469489', '3212', '1054023212'}
 
 
 def load_json(filename, default=None):
@@ -259,14 +259,16 @@ def generate_html_structure(build_date):
 
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+  <button class="tab-btn" onclick="switchTab('entitydetails')">Entity Details</button>
   <button class="tab-btn" onclick="switchTab('bankstatements')">Bank Statements</button>
   <button class="tab-btn" onclick="switchTab('bankrecon')">Bank Recon</button>
+  <button class="tab-btn" onclick="switchTab('trialbalance')">Trial Balance</button>
   <button class="tab-btn" onclick="switchTab('incomestatement')">Income Statement</button>
   <button class="tab-btn" onclick="switchTab('balancesheet')">Balance Sheet</button>
   <button class="tab-btn" onclick="switchTab('cashflow')">Cash Flow</button>
   <button class="tab-btn" onclick="switchTab('invoices')">Invoices</button>
   <button class="tab-btn" onclick="switchTab('spending')">Spending Tracker</button>
-  <button class="tab-btn" onclick="switchTab('loanschedules')">Loan Schedules</button>
+  <button class="tab-btn" onclick="switchTab('workingpapers')">Working Papers</button>
 </div>
 
 <!-- OVERVIEW TAB -->
@@ -277,7 +279,14 @@ def generate_html_structure(build_date):
     <div class="chart-box"><h3>Top Expense Categories</h3><canvas id="chartExpCat"></canvas></div>
   </div>
   <div class="card" id="dataQuality"></div>
+  <div class="card" id="queriesCard"></div>
+</div>
+
+<!-- ENTITY DETAILS TAB -->
+<div id="tab-entitydetails" class="tab-content">
   <div class="card" id="entityDetails"></div>
+  <div class="card" id="entityBankAccounts"></div>
+  <div class="card" id="entityShareholders"></div>
 </div>
 
 <!-- BANK STATEMENTS TAB -->
@@ -287,6 +296,7 @@ def generate_html_structure(build_date):
       <option value="">All Accounts</option>
       <option value="80204693662">Bank Zero (80204693662)</option>
       <option value="1053469489">Capitec (1053469489)</option>
+      <option value="1054023212">Capitec (1054023212)</option>
       <option value="3212">EasyEquities (3212)</option>
     </select>
     <select id="bsCategory" onchange="renderBankStatements()">
@@ -337,12 +347,14 @@ def generate_html_structure(build_date):
   </div>
 </div>
 
-<!-- LOAN SCHEDULES TAB -->
-<div id="tab-loanschedules" class="tab-content">
-  <div class="coming-soon">
-    <h2>👨‍🍳</h2>
-    <p>Chill, it's cooking... We're busy making this tab look proper lekker. Sit tight — the amortisation tables, interest breakdowns, and all that jazz are on the way.</p>
-  </div>
+<!-- TRIAL BALANCE TAB -->
+<div id="tab-trialbalance" class="tab-content">
+  <div class="card" id="trialBalanceContent"></div>
+</div>
+
+<!-- WORKING PAPERS TAB -->
+<div id="tab-workingpapers" class="tab-content">
+  <div id="workingPapersContent"></div>
 </div>
 
 <!-- DRILL-DOWN MODAL -->
@@ -356,11 +368,15 @@ def generate_html_structure(build_date):
 """
 
 
-def generate_javascript(transactions, recon, invoices, registry, build_date):
+def generate_javascript(transactions, recon, invoices, registry, build_date, trial_balance, fin_stmts, working_papers, queries):
     txn_json = minify_json(transactions)
     recon_json = minify_json(recon)
     inv_json = minify_json(invoices)
     reg_json = minify_json(registry)
+    tb_json = minify_json(trial_balance)
+    fs_json = minify_json(fin_stmts)
+    wp_json = minify_json(working_papers)
+    q_json = minify_json(queries)
 
     return """
 <script>
@@ -369,6 +385,10 @@ var TXN=""" + txn_json + """;
 var RECON=""" + recon_json + """;
 var INVOICES=""" + inv_json + """;
 var ENTITY=""" + reg_json + """;
+var TB=""" + tb_json + """;
+var FINSTMTS=""" + fs_json + """;
+var WP=""" + wp_json + """;
+var QUERIES=""" + q_json + """;
 var BUILD_DATE='""" + build_date + """';
 
 var QUOTES=[
@@ -461,13 +481,16 @@ function renderActiveTab(){
   var active=document.querySelector('.tab-content.active');
   var id=active?active.id.replace('tab-',''):'overview';
   if(id==='overview')renderOverview();
+  else if(id==='entitydetails')renderEntityDetails();
   else if(id==='bankstatements')renderBankStatements();
   else if(id==='bankrecon')renderBankRecon();
+  else if(id==='trialbalance')renderTrialBalance();
   else if(id==='incomestatement')renderIncomeStatement();
   else if(id==='balancesheet')renderBalanceSheet();
   else if(id==='cashflow')renderCashFlow();
   else if(id==='invoices')renderInvoices();
   else if(id==='spending')renderSpending();
+  else if(id==='workingpapers')renderWorkingPapers();
 }
 
 // ========== CHART HELPER ==========
@@ -573,26 +596,19 @@ function renderOverview(){
     '<div style="margin-bottom:8px"><span style="color:var(--text2)">Reconciled: </span><span style="font-weight:700;color:'+(reconPct===100?'var(--green)':'var(--red)')+'">'+reconPct+'%</span> ('+reconOk+'/'+reconAccts+')</div>'+
     '<div><span style="color:var(--text2)">Invoices: </span><span style="color:var(--text)"><b>'+INVOICES.length+'</b></span></div>';
 
-  // Entity details
-  var ent=ENTITY.Honeybird||{};
-  var prevNames=(ent.previous_names||[]).join(' → ');
-  var acctRows='';
-  var ba=ent.bank_accounts||[];
-  for(var i=0;i<ba.length;i++){
-    acctRows+='<tr><td>'+ba[i].bank+'</td><td>'+ba[i].account_number+'</td><td>'+ba[i].account_type+'</td></tr>';
+  // Queries summary
+  var qh='<h3 style="color:var(--accent);margin-bottom:12px">Open Queries ❓</h3>';
+  if(QUERIES.length>0){
+    qh+='<table><tr><th>#</th><th>Description</th><th>Status</th></tr>';
+    for(var q=0;q<QUERIES.length;q++){
+      var statusClass=QUERIES[q].status==='Resolved'?'badge-green':'badge-orange';
+      qh+='<tr><td>'+QUERIES[q].number+'</td><td>'+QUERIES[q].description+'</td><td><span class="badge '+statusClass+'">'+QUERIES[q].status+'</span></td></tr>';
+    }
+    qh+='</table>';
+  }else{
+    qh+='<div style="color:var(--text2);padding:20px;text-align:center">No open queries — lekker! 🎉</div>';
   }
-  document.getElementById('entityDetails').innerHTML='<h3 style="color:var(--accent);margin-bottom:12px">Entity Details 🐝</h3>'+
-    '<div class="info-grid" style="margin-bottom:16px">'+
-    '<div class="lbl">Legal Name</div><div class="val">'+(ent.legal_name||'')+'</div>'+
-    '<div class="lbl">Registration</div><div class="val">'+(ent.registration_number||'')+'</div>'+
-    '<div class="lbl">VAT Number</div><div class="val">'+(ent.vat_number||'')+(ent.vat_registered?' ✓':' ✗')+'</div>'+
-    '<div class="lbl">Income Tax</div><div class="val">'+(ent.income_tax_number||'')+'</div>'+
-    '<div class="lbl">FYE</div><div class="val">'+(ent.financial_year_end||'')+'</div>'+
-    '<div class="lbl">Registered</div><div class="val">'+(ent.date_of_registration||'')+'</div>'+
-    '<div class="lbl">Address</div><div class="val">'+(ent.address||'')+'</div>'+
-    '<div class="lbl">Previous Names</div><div class="val prev-name">'+prevNames+'</div>'+
-    '</div>'+
-    '<table><tr><th>Bank</th><th>Account</th><th>Type</th></tr>'+acctRows+'</table>';
+  document.getElementById('queriesCard').innerHTML=qh;
 
   // 12-month trend chart
   var mLabels=[],incTrend=[],expTrend=[];
@@ -840,75 +856,63 @@ function renderIncomeStatement(){
 
 // ========== BALANCE SHEET ==========
 function renderBalanceSheet(){
-  // Assets = bank balances (operating)
-  var totalAssets=0;
-  var assetRows='';
-  if(RECON.accounts&&RECON.accounts.Honeybird){
-    for(var acct in RECON.accounts.Honeybird){
-      var info=RECON.accounts.Honeybird[acct];
-      if(!isLiability(info)){
-        var bal=info.statement_closing_balance||0;
-        totalAssets+=bal;
-        assetRows+='<tr><td style="padding-left:24px">'+(info.bank||'')+' ('+acct+')</td><td style="text-align:right">'+fmt(bal)+'</td></tr>';
-      }
-    }
-  }
-
-  // Liabilities
-  var totalLiabilities=0;
-  var liabRows='';
-  if(RECON.accounts&&RECON.accounts.Honeybird){
-    for(var acct in RECON.accounts.Honeybird){
-      var info=RECON.accounts.Honeybird[acct];
-      if(isLiability(info)){
-        var bal=Math.abs(info.statement_closing_balance||0);
-        totalLiabilities+=bal;
-        liabRows+='<tr><td style="padding-left:24px">'+(info.bank||'')+' ('+acct+')</td><td style="text-align:right">'+fmt(bal)+'</td></tr>';
-      }
-    }
-  }
-
-  // Equity = YTD P/L (retained earnings)
-  var ytdInc=0,ytdExp=0;
-  var fyMonths=getFYMonths();
-  var fyStart=fyMonths[0];var fyEnd=fyMonths[11];
-  for(var i=0;i<TXN.length;i++){
-    var ym=(TXN[i].date||'').substring(0,7);
-    if(ym>=fyStart&&ym<=fyEnd){
-      if((TXN[i].amount||0)>0)ytdInc+=Math.abs(TXN[i].amount);
-      else ytdExp+=Math.abs(TXN[i].amount);
-    }
-  }
-  var retainedEarnings=ytdInc-ytdExp;
-  var totalEquity=retainedEarnings;
-  var totalLE=totalLiabilities+totalEquity;
+  var bs=FINSTMTS.balance_sheet||{};
+  var totalAssets=bs.total_assets||0;
+  var totalEquity=bs.total_equity||0;
+  var totalLiabilities=bs.total_liabilities||0;
+  var totalLE=totalEquity+totalLiabilities;
+  var oob=bs.out_of_balance||0;
   var diff=Math.round((totalAssets-totalLE)*100)/100;
-  var balanced=Math.abs(diff)<0.01;
+  var balanced=Math.abs(oob)<0.01&&Math.abs(diff)<0.01;
 
   // Banner
   var banner='';
   if(balanced){
-    banner='<div class="success-banner">✅ Perfectly balanced, as all things should be.</div>';
+    banner='<div class="success-banner">\\u2705 Perfectly balanced, as all things should be.</div>';
   }else{
-    banner='<div class="error-banner">⚠️ This is not a Balance Sheet... this is just a Sheet. Out of balance by '+fmt(diff)+'</div>';
+    banner='<div class="error-banner">\\u26a0\\ufe0f This is not a Balance Sheet... this is just a Sheet. Out of balance by '+fmt(oob)+'</div>';
   }
   document.getElementById('bsBanner').innerHTML=banner;
 
-  var h='<h3 style="color:var(--accent);margin-bottom:16px">Balance Sheet — Honeybird</h3>';
+  var h='<h3 style="color:var(--accent);margin-bottom:16px">Statement of Financial Position — 30 April 2026</h3>';
   h+='<table>';
-  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--green);font-weight:700;padding:10px 12px">Assets</td></tr>';
-  h+=assetRows||'<tr><td colspan="2" style="padding-left:24px;color:var(--text2)">No assets recorded</td></tr>';
+
+  // Assets
+  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--green);font-weight:700;padding:10px 12px">ASSETS</td></tr>';
+  var assets=bs.assets||[];
+  if(assets.length>0){
+    for(var i=0;i<assets.length;i++){
+      h+='<tr><td style="padding-left:24px">'+assets[i].name+'</td><td style="text-align:right">'+fmt(assets[i].amount)+'</td></tr>';
+    }
+  }else{
+    h+='<tr><td colspan="2" style="padding-left:24px;color:var(--text2)">No assets recorded</td></tr>';
+  }
   h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Assets</td><td style="text-align:right;color:var(--green)">'+fmt(totalAssets)+'</td></tr>';
 
-  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--red);font-weight:700;padding:10px 12px">Liabilities</td></tr>';
-  h+=liabRows||'<tr><td colspan="2" style="padding-left:24px;color:var(--text2)">No liabilities</td></tr>';
-  h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Liabilities</td><td style="text-align:right;color:var(--red)">'+fmt(totalLiabilities)+'</td></tr>';
-
-  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--blue);font-weight:700;padding:10px 12px">Equity</td></tr>';
-  h+='<tr><td style="padding-left:24px">Retained Earnings (YTD P/L)</td><td style="text-align:right">'+fmt(retainedEarnings)+'</td></tr>';
+  // Equity
+  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--blue);font-weight:700;padding:10px 12px">EQUITY</td></tr>';
+  var equity=bs.equity||[];
+  if(equity.length>0){
+    for(var i=0;i<equity.length;i++){
+      var amtColor=equity[i].amount<0?'color:var(--red)':'';
+      h+='<tr><td style="padding-left:24px">'+equity[i].name+'</td><td style="text-align:right;'+amtColor+'">'+fmt(equity[i].amount)+'</td></tr>';
+    }
+  }
   h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Equity</td><td style="text-align:right;color:var(--blue)">'+fmt(totalEquity)+'</td></tr>';
 
-  h+='<tr style="border-top:3px double var(--accent);font-weight:700;font-size:13px"><td>Liabilities + Equity</td><td style="text-align:right;color:var(--accent)">'+fmt(totalLE)+'</td></tr>';
+  // Liabilities
+  h+='<tr style="background:var(--bg3)"><td colspan="2" style="color:var(--red);font-weight:700;padding:10px 12px">LIABILITIES</td></tr>';
+  var liabs=bs.liabilities||[];
+  if(liabs.length>0){
+    for(var i=0;i<liabs.length;i++){
+      h+='<tr><td style="padding-left:24px">'+liabs[i].name+'</td><td style="text-align:right">'+fmt(liabs[i].amount)+'</td></tr>';
+    }
+  }else{
+    h+='<tr><td colspan="2" style="padding-left:24px;color:var(--text2)">No liabilities</td></tr>';
+  }
+  h+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Liabilities</td><td style="text-align:right;color:var(--red)">'+fmt(totalLiabilities)+'</td></tr>';
+
+  h+='<tr style="border-top:3px double var(--accent);font-weight:700;font-size:13px"><td>Total Equity + Liabilities</td><td style="text-align:right;color:var(--accent)">'+fmt(totalLE)+'</td></tr>';
   h+='</table>';
   document.getElementById('balanceSheetContent').innerHTML=h;
 }
@@ -1032,6 +1036,126 @@ function renderSpending(){
   renderChart('chartSpendStack','bar',mLabels,datasets,{stacked:true,aspectRatio:1.5});
 }
 
+// ========== ENTITY DETAILS ==========
+function renderEntityDetails(){
+  var ent=ENTITY.Honeybird||{};
+  var prevNames=(ent.previous_names||[]).join(' \\u2192 ');
+  document.getElementById('entityDetails').innerHTML='<h3 style="color:var(--accent);margin-bottom:12px">\\ud83d\\udc1d Company Information</h3>'+
+    '<div class="info-grid" style="margin-bottom:16px">'+
+    '<div class="lbl">Legal Name</div><div class="val">'+(ent.legal_name||'')+'</div>'+
+    '<div class="lbl">Entity Type</div><div class="val">'+(ent.entity_type||'Private Company')+'</div>'+
+    '<div class="lbl">Registration</div><div class="val">'+(ent.registration_number||'')+'</div>'+
+    '<div class="lbl">VAT Status</div><div class="val">'+(ent.vat_registered?'Registered ('+ent.vat_number+')':'<span style="color:var(--orange)">NOT Registered</span>')+'</div>'+
+    '<div class="lbl">Income Tax</div><div class="val">'+(ent.income_tax_number||'<span style="color:var(--text2)">Not assigned</span>')+'</div>'+
+    '<div class="lbl">Financial Year End</div><div class="val">'+(ent.financial_year_end||'')+'</div>'+
+    '<div class="lbl">Date Registered</div><div class="val">'+(ent.date_of_registration||'')+'</div>'+
+    '<div class="lbl">Address</div><div class="val">'+(ent.address||'')+'</div>'+
+    '<div class="lbl">Previous Names</div><div class="val prev-name">'+prevNames+'</div>'+
+    '</div>';
+
+  // Bank accounts
+  var acctRows='';
+  var ba=ent.bank_accounts||[];
+  for(var i=0;i<ba.length;i++){
+    var bal='—';
+    if(RECON.accounts&&RECON.accounts.Honeybird&&RECON.accounts.Honeybird[ba[i].account_number]){
+      bal=fmt(RECON.accounts.Honeybird[ba[i].account_number].statement_closing_balance||0);
+    }
+    acctRows+='<tr><td>'+ba[i].bank+'</td><td>'+ba[i].account_number+'</td><td>'+ba[i].account_type+'</td><td>'+(ba[i].branch||'—')+'</td><td style="text-align:right">'+bal+'</td></tr>';
+  }
+  document.getElementById('entityBankAccounts').innerHTML='<h3 style="color:var(--accent);margin-bottom:12px">\\ud83c\\udfe6 Bank Accounts</h3>'+
+    '<table><tr><th>Bank</th><th>Account Number</th><th>Type</th><th>Branch</th><th style="text-align:right">Balance</th></tr>'+acctRows+'</table>';
+
+  // Shareholders
+  var sh='<h3 style="color:var(--accent);margin-bottom:12px">\\ud83d\\udc65 Shareholders / Contributors</h3>';
+  // Pull from working papers if available
+  var contribs=[];
+  for(var w=0;w<WP.length;w++){
+    if(WP[w].name.indexOf('SHAREHOLDER')>=0){
+      for(var e=0;e<WP[w].entries.length;e++){
+        var entry=WP[w].entries[e];
+        if(entry.description.indexOf('Total')<0&&entry.description.indexOf('Opening')<0&&entry.description.indexOf('Closing')<0){
+          contribs.push(entry);
+        }
+      }
+    }
+  }
+  if(contribs.length>0){
+    sh+='<table><tr><th>Contributor</th><th style="text-align:right">Amount</th></tr>';
+    var totalContrib=0;
+    for(var c=0;c<contribs.length;c++){
+      sh+='<tr><td>'+contribs[c].description+'</td><td style="text-align:right">'+fmt(contribs[c].amount)+'</td></tr>';
+      totalContrib+=contribs[c].amount;
+    }
+    sh+='<tr style="border-top:2px solid var(--border);font-weight:700"><td>Total Contributions</td><td style="text-align:right;color:var(--accent)">'+fmt(totalContrib)+'</td></tr>';
+    sh+='</table>';
+  }else{
+    sh+='<div style="color:var(--text2);padding:20px;text-align:center">No shareholder data available</div>';
+  }
+  document.getElementById('entityShareholders').innerHTML=sh;
+}
+
+// ========== TRIAL BALANCE ==========
+function renderTrialBalance(){
+  var h='<h3 style="color:var(--accent);margin-bottom:16px">Draft Trial Balance — Year ended 30 April 2026</h3>';
+  h+='<div class="tbl-scroll"><table><tr><th>Code</th><th>Account</th><th>Section</th><th style="text-align:right">Debit (R)</th><th style="text-align:right">Credit (R)</th><th>WP Ref</th></tr>';
+  var totalDr=0,totalCr=0;
+  var lastSection='';
+  for(var i=0;i<TB.length;i++){
+    var t=TB[i];
+    if(t.section!==lastSection){
+      var secColor=t.section==='ASSETS'?'var(--green)':t.section==='EQUITY'?'var(--blue)':t.section==='LIABILITIES'?'var(--red)':t.section==='INCOME'?'var(--green)':'var(--orange)';
+      h+='<tr style="background:var(--bg3)"><td colspan="6" style="color:'+secColor+';font-weight:700;padding:10px 12px">'+t.section+'</td></tr>';
+      lastSection=t.section;
+    }
+    totalDr+=t.debit||0;
+    totalCr+=t.credit||0;
+    h+='<tr><td>'+t.account_code+'</td><td>'+t.account_name+'</td><td>'+t.section+'</td>';
+    h+='<td style="text-align:right">'+(t.debit>0?fmt(t.debit):'—')+'</td>';
+    h+='<td style="text-align:right">'+(t.credit>0?fmt(t.credit):'—')+'</td>';
+    h+='<td style="font-size:10px;color:var(--text2)">'+(t.wp_ref||'')+'</td></tr>';
+  }
+  var diff=Math.round((totalDr-totalCr)*100)/100;
+  h+='<tr style="border-top:3px double var(--accent);font-weight:700"><td colspan="3">TOTALS</td>';
+  h+='<td style="text-align:right">'+fmt(totalDr)+'</td>';
+  h+='<td style="text-align:right">'+fmt(totalCr)+'</td>';
+  h+='<td></td></tr>';
+  if(Math.abs(diff)>0.01){
+    h+='<tr><td colspan="6" style="color:var(--red);font-weight:700;text-align:center;padding:12px">\\u26a0\\ufe0f Trial Balance difference: '+fmt(diff)+'</td></tr>';
+  }
+  h+='</table></div>';
+  if(TB.length===0){
+    h='<div style="text-align:center;padding:60px;color:var(--text2)">No trial balance data yet</div>';
+  }
+  document.getElementById('trialBalanceContent').innerHTML=h;
+}
+
+// ========== WORKING PAPERS ==========
+function renderWorkingPapers(){
+  var container=document.getElementById('workingPapersContent');
+  var h='';
+  if(WP.length===0){
+    h='<div class="card" style="text-align:center;padding:60px;color:var(--text2)">No working papers yet</div>';
+    container.innerHTML=h;
+    return;
+  }
+  for(var w=0;w<WP.length;w++){
+    var wp=WP[w];
+    h+='<div class="card">';
+    h+='<h3 style="color:var(--accent);margin-bottom:12px">'+wp.name+'</h3>';
+    h+='<table><tr><th>Description</th><th style="text-align:right">Amount (R)</th></tr>';
+    for(var e=0;e<wp.entries.length;e++){
+      var entry=wp.entries[e];
+      var isTotal=entry.description.indexOf('Total')>=0||entry.description.indexOf('Closing')>=0||entry.description.indexOf('Net ')>=0;
+      var style=isTotal?'border-top:2px solid var(--border);font-weight:700':'';
+      var amtColor=entry.amount<0?'color:var(--red)':'';
+      h+='<tr style="'+style+'"><td>'+entry.description+'</td><td style="text-align:right;'+amtColor+'">'+fmt(entry.amount)+'</td></tr>';
+    }
+    h+='</table></div>';
+  }
+  container.innerHTML=h;
+}
+
 // ========== INIT ==========
 rotateQuote();
 setInterval(rotateQuote,8000);
@@ -1049,10 +1173,17 @@ def build():
     recon = load_json('recon.json', {"accounts": {"Honeybird": {}}})
     invoices = load_json('invoices.json', [])
     registry = load_json('entity_registry.json', {})
+    trial_balance = load_json('trial_balance.json', [])
+    fin_stmts = load_json('financial_statements.json', {})
+    working_papers = load_json('working_papers.json', [])
+    queries = load_json('queries.json', [])
 
     print(f"[DATA] Transactions: {len(transactions)}")
     print(f"[DATA] Invoices: {len(invoices)}")
     print(f"[DATA] Accounts in recon: {len(recon.get('accounts', {}).get('Honeybird', {}))}")
+    print(f"[DATA] Trial Balance entries: {len(trial_balance)}")
+    print(f"[DATA] Working Papers: {len(working_papers)}")
+    print(f"[DATA] Queries: {len(queries)}")
 
     # Validate
     transactions = validate_account_ownership(transactions, registry)
@@ -1061,7 +1192,7 @@ def build():
 
     # Build HTML
     html = generate_html_structure(build_date)
-    html += generate_javascript(transactions, recon, invoices, registry, build_date)
+    html += generate_javascript(transactions, recon, invoices, registry, build_date, trial_balance, fin_stmts, working_papers, queries)
     html += "\n</body>\n</html>"
 
     with open(OUTPUT_PATH, 'w') as f:
