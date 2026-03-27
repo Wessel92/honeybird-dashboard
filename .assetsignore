@@ -1,0 +1,7 @@
+.git
+.wrangler
+wrangler.toml
+*.py
+data/
+*.md
+.assetsignore

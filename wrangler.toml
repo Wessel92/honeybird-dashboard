@@ -1,0 +1,6 @@
+name = "honeybird-dashboard"
+compatibility_date = "2024-09-23"
+account_id = "0715db72409356eeb8f846c40fb3484f"
+
+[assets]
+directory = "./"

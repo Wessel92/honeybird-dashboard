@@ -403,6 +403,43 @@ working_papers = extract_working_papers()
 invoices = extract_invoices()
 queries = extract_queries()
 
+# DERIVE BALANCE SHEET LINE ITEMS FROM TRIAL BALANCE (more reliable than parsing FS sheet)
+bs = fin_stmts['balance_sheet']
+if not bs['assets'] or not bs['equity'] or not bs['liabilities']:
+    print("  -> Deriving BS line items from Trial Balance...")
+    bs['assets'] = []
+    bs['equity'] = []
+    bs['liabilities'] = []
+    total_assets = 0
+    total_equity = 0
+    total_liabilities = 0
+    for tb in trial_balance:
+        net = round(tb['debit'] - tb['credit'], 2)
+        if tb['section'] == 'ASSETS':
+            bs['assets'].append({"name": tb['account_name'], "amount": round(tb['debit'] - tb['credit'], 2)})
+            total_assets += net
+        elif tb['section'] == 'EQUITY':
+            # Equity: credit balance positive, debit balance (losses) negative
+            eq_amt = round(tb['credit'] - tb['debit'], 2)
+            bs['equity'].append({"name": tb['account_name'], "amount": eq_amt})
+            total_equity += eq_amt
+        elif tb['section'] == 'LIABILITIES':
+            # Liabilities: credit balance positive, debit balance negative (receivable)
+            li_amt = round(tb['credit'] - tb['debit'], 2)
+            bs['liabilities'].append({"name": tb['account_name'], "amount": li_amt})
+            total_liabilities += li_amt
+    bs['total_assets'] = round(total_assets, 2)
+    bs['total_equity'] = round(total_equity, 2)
+    bs['total_liabilities'] = round(total_liabilities, 2)
+    bs['total_equity_liabilities'] = round(total_equity + total_liabilities, 2)
+    bs['out_of_balance'] = round(total_assets - (total_equity + total_liabilities), 2)
+
+# Also ensure IS has revenue section
+if 'revenue' not in fin_stmts['income_statement']:
+    fin_stmts['income_statement']['revenue'] = []
+    fin_stmts['income_statement']['total_revenue'] = 0
+    fin_stmts['income_statement']['total_expenses'] = fin_stmts['income_statement']['net_loss']
+
 # Update recon with transaction counts
 for t in transactions:
     acct = t.get('account', '')

@@ -1,15 +1,44 @@
 {
   "balance_sheet": {
-    "assets": [],
+    "assets": [
+      {
+        "name": "Bank - Capitec 1054023212",
+        "amount": 67423.0
+      }
+    ],
     "total_assets": 67423.0,
-    "equity": [],
+    "equity": [
+      {
+        "name": "Share capital / Stated capital",
+        "amount": 0.0
+      },
+      {
+        "name": "Shareholders contributions",
+        "amount": 430000.0
+      },
+      {
+        "name": "Retained earnings / (Accumulated loss)",
+        "amount": -3077.0
+      }
+    ],
     "total_equity": 426923.0,
-    "liabilities": [],
-    "total_liabilities": 360500.0,
-    "total_equity_liabilities": 787423.0,
-    "out_of_balance": -720000.0
+    "liabilities": [
+      {
+        "name": "Loan - Rivendell Holdings",
+        "amount": 500.0
+      },
+      {
+        "name": "Interaccount transfer - 4001830078",
+        "amount": -360000.0
+      }
+    ],
+    "total_liabilities": -359500.0,
+    "total_equity_liabilities": 67423.0,
+    "out_of_balance": 0.0
   },
   "income_statement": {
+    "revenue": [],
+    "total_revenue": 0.0,
     "expenses": [
       {
         "name": "Bank charges",
@@ -20,6 +49,7 @@
         "amount": -2875.0
       }
     ],
+    "total_expenses": -3077.0,
     "net_loss": -3077.0
   }
 }
